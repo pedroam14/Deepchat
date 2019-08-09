@@ -1,53 +1,44 @@
 import json
-import random as rnd
-import numpy as np
+import random
 import tensorflow as tf
 import tflearn as tfl
+import numpy as np
 import nltk
 from nltk.stem.lancaster import LancasterStemmer
 stemmer = LancasterStemmer()
 
-if (__name__ == "__main__"):
-    with open('data.json') as file:
+if __name__ == "__main__":
+    with open("data.json") as file:
         data = json.load(file)
 
-    words: list = []
+    words:  list = []
     labels: list = []
-    docsX: list = []
-    docsY: list = []
-    for intent in data['intents']:
-        for pattern in intent['patterns']:
-            wrds: list = nltk.word_tokenize(pattern)
+    docsX:  list = []
+    docsY:  list = []
+
+    for intent in data["intents"]:
+        for pattern in intent["patterns"]:
+            wrds = nltk.word_tokenize(pattern)
             words.extend(wrds)
             docsX.append(wrds)
             docsY.append(intent["tag"])
-        if(intent['tag'] not in labels):
-            labels.append(intent['tag'])
-    '''
-    for i in range(len(words)):
-        print(words[i])
-    # '''
-    j = 0
-    # method in charge of updating the list of words to just their stems, and removing question marks
-    for w in words:
-        if (w != "?"):
-            words[j] = stemmer.stem(w.lower())
-            j += 1
-    for i in range(len(words)-1, j, -1):
-        words.pop(i)
+
+        if intent["tag"] not in labels:
+            labels.append(intent["tag"])
+
+    words = [stemmer.stem(w.lower()) for w in words if w != "?"]
     words = sorted(list(set(words)))
-    '''
-    for i in range(len(words)):
-        print(words[i])
-    #'''
+
     labels = sorted(labels)
 
-    training: list = []
-    output: list = []
+    training = []
+    output = []
 
-    outEmpty = [0 for i in range(len(labels))]
+    out_empty = [0 for _ in range(len(labels))]
+
     for x, doc in enumerate(docsX):
-        bag: list = []
+        bag = []
+
         wrds = [stemmer.stem(w.lower()) for w in doc]
 
         for w in words:
@@ -55,10 +46,23 @@ if (__name__ == "__main__"):
                 bag.append(1)
             else:
                 bag.append(0)
-        outputRow = outEmpty[:]
+
+        outputRow = out_empty[:]
         outputRow[labels.index(docsY[x])] = 1
 
         training.append(bag)
-        training.append(outputRow)
+        output.append(outputRow)
+
     training = np.array(training)
-    output = np.array(outputRow)
+    output = np.array(output)
+    tf.reset_default_graph()
+
+    net = tfl.input_data(shape=[None, len(training[0])])
+    net = tfl.fully_connected(net, 16)
+    net = tfl.fully_connected(net, 16)
+    net = tfl.fully_connected(net, len(output[0]), activation="softmax")
+    net = tfl.regression(net)
+
+    model = tfl.DNN(net)
+    model.fit(training, output, n_epoch=5000, batch_size=16, show_metric=True)
+    model.save("Model/model.tflearn")
